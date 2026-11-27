@@ -20,8 +20,9 @@ def fit_trend(times: Sequence[float], values: Sequence[float], degree: int = 1) 
 
 def time_to_limit(trend: np.ndarray, limit: float) -> float | None:
     """Через сколько секунд тренд дойдёт до лимита. None, если память сейчас не растёт."""
-    # Последний коэффициент - значение сейчас, предпоследний - скорость роста сейчас
-    if trend[-2] <= 0:
+    # Последний коэффициент - значение сейчас, предпоследний - скорость роста сейчас.
+    # Рост меньше 1e-9 МБ/с - это погрешность вычислений, на x86 у ровной линии она бывает > 0
+    if trend[-2] <= 1e-9:
         return None
     if trend[-1] >= limit:
         return 0.0
