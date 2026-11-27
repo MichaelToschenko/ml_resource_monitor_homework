@@ -73,3 +73,7 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 addopts = "-m 'not slow' --cov=resmon --cov-report=term-missing --cov-fail-under=70"
 markers = ["slow: тесты с настоящей моделью, в CI не запускаются"]
+
+[tool.coverage.run]
+# Пути в файле покрытия относительные, так его читает бейдж в CI
+relative_files = true

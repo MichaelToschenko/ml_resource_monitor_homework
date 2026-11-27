@@ -1,6 +1,7 @@
 # resmon - монитор ресурсов для ML-задач
 
 [![CI](https://github.com/MichaelToschenko/ml_resource_monitor_homework/actions/workflows/ci.yml/badge.svg)](https://github.com/MichaelToschenko/ml_resource_monitor_homework/actions/workflows/ci.yml)
+[![Покрытие тестами](https://raw.githubusercontent.com/MichaelToschenko/ml_resource_monitor_homework/python-coverage-comment-action-data/badge.svg)](https://github.com/MichaelToschenko/ml_resource_monitor_homework/tree/python-coverage-comment-action-data)
 [![Docker Hub](https://img.shields.io/badge/Docker%20Hub-mikhailtoshchenko%2Fresmon-blue)](https://hub.docker.com/r/mikhailtoshchenko/resmon)
 
 Библиотека, которая показывает, сколько ресурсов съедает каждый кусок ML-кода: процессор, память программы и всей машины, видеокарта, диск, сеть, память под объекты Python и работа сборщика мусора. Код размечается декоратором или контекст-менеджером, замеры идут в фоновом потоке и пишутся в JSON-лог с ротацией. По логу строится отчёт по секциям и живой дашборд в Streamlit.
