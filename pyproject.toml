@@ -60,7 +60,7 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.mypy]
 strict = true
-files = ["src", "tests"]
+files = ["src", "tests", "research.py"]
 
 [[tool.mypy.overrides]]
 # У pynvml и plotly нет описаний типов
