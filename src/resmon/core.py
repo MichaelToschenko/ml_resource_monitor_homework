@@ -209,7 +209,11 @@ class Monitor:
         with self._lock:
             self.records.append(record)
             for sink in self.sinks:
-                sink(record)
+                # Например, кончился диск. Программу из-за этого не роняем
+                try:
+                    sink(record)
+                except Exception:
+                    log.exception("хранилище %s упало", type(sink).__name__)
 
     def sample(self) -> Record:
         """Снять показания со всех сборщиков и отправить их в sinks."""
