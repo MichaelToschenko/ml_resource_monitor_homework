@@ -93,18 +93,30 @@ def gc_tricks() -> None:
     """Вопрос 3: помогают ли gc.freeze() и выключение сборщика на горячем участке."""
     rows = []
     for name in ("как есть", "gc.disable() на горячем участке", "gc.freeze() после загрузки"):
+        # Каждый приём начинаем с одинаковой чистой памяти, иначе сравнение нечестное
+        gc.collect()
         # Долгоживущие данные, например загруженный датасет, а потом горячий участок
         base = make_objects(5_000_000)
         if name.startswith("gc.freeze"):
             gc.freeze()
         if name.startswith("gc.disable"):
             gc.disable()
-        rows.append([name, *gc_cost(partial(make_objects, 2_000_000))])
+        collector = GcCollector()
+        collector.start()
+        before, start = collector.collect(), time.perf_counter()
+        hot = make_objects(2_000_000)
+        hot_s = time.perf_counter() - start
         gc.enable()
+        # Программа живёт дальше, и отложенная уборка случается уже здесь
+        tail = make_objects(100_000)
+        total_s, after = time.perf_counter() - start, collector.collect()
+        collector.stop()
+        full = after["gc_gen2"] - before["gc_gen2"]
+        rows.append([name, f"{hot_s:.2f}", f"{total_s:.2f}", f"{full:.0f}"])
         gc.unfreeze()
-        del base
+        del base, hot, tail
         gc.collect()
-    table(["приём", "время, с", "сборок мусора", "время сборок, мс"], rows)
+    table(["приём", "горячий участок, с", "вместе с уборкой после, с", "полных уборок"], rows)
 
 
 def scenario(kind: str, seed: int) -> list[Record]:
