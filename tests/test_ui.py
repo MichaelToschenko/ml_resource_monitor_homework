@@ -57,7 +57,7 @@ def test_dashboard(
     ("extra", "age", "expected"),
     [
         ([], 0, " с"),  # тревога идёт, отсчёт от прогноза
-        ([], 30, "замеров нет уже 30 с"),  # процесс, похоже, умер
+        ([], 30, "нет замеров 30 с"),  # процесс, похоже, умер
         ([{"event": "stop", "t": 0, "section": ""}], 0, "запуск окончен"),
     ],
 )
@@ -79,3 +79,17 @@ def test_dashboard_on_empty_log(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     log.write_text('{"event": "start", "t": 0, "section": ""}\n')
     page = open_dashboard(monkeypatch, log)
     assert "нет замеров" in page.info[0].value
+
+
+def test_dashboard_compares_runs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    for name, used in [("fast.jsonl", [500.0] * 10), ("demo.jsonl", [600.0] * 10)]:
+        sink = make_sink(tmp_path / name)
+        for record in run(used, time.time()):
+            sink(record)
+        sink.close()
+    page = open_dashboard(monkeypatch, tmp_path / "demo.jsonl")
+    # Второй выпадающий список - с каким запуском сравнить
+    page = page.selectbox[1].select(tmp_path / "fast.jsonl").run()
+    table = page.dataframe[1].value
+    # Пик памяти программы: 400 МБ в коротком запуске против 500 в длинном
+    assert "400.0 → 500.0 (+25%)" in table.iloc[0].tolist()

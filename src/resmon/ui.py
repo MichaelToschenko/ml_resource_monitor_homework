@@ -7,7 +7,7 @@ import streamlit as st
 
 from resmon.core import Record
 from resmon.forecast import HORIZON_S, WINDOW_S, OomForecast
-from resmon.report import COLUMNS, Stats, cell, last_run, section_stats
+from resmon.report import COLUMNS, Stats, cell, compare_rows, last_run, section_stats
 from resmon.sink import read_records
 
 
@@ -38,6 +38,7 @@ def icicle(stats: Stats) -> go.Figure:
         labels=labels,
         values=times,
         branchvalues="total",
+        sort=False,  # секции в порядке выполнения слева направо, а не по размеру
         root_color="lightgrey",
         tiling={"orientation": "v"},  # корень сверху, вложенные секции под ним
         texttemplate="%{label}<br>%{value:.1f} с",
@@ -53,14 +54,14 @@ def countdown(records: list[Record], forecast: OomForecast, now: float) -> str:
         return "запуск окончен"
     age = now - max(r["t"] for r in records if r["event"] == "sample")
     if age > 5:
-        return f"замеров нет уже {age:.0f} с"
+        return f"нет замеров {age:.0f} с"
     if forecast.alarm_since is None:
         return "не грозит"
     return "тревога" if forecast.ttl is None else f"{max(forecast.ttl - age, 0):.0f} с"
 
 
 @st.fragment(run_every=2)
-def live(log: Path) -> None:
+def live(log: Path, other: Path | None) -> None:
     """Перечитать лог и перерисовать страницу. Streamlit вызывает это раз в 2 секунды."""
     if not log.exists():
         st.info(f"Жду файл {log}. Его создаст, например, команда resmon demo")
@@ -107,9 +108,18 @@ def live(log: Path) -> None:
     ]
     st.dataframe(rows, hide_index=True)
 
+    if other and other.exists():
+        st.subheader(f"Сравнение: было {other.name}, стало {log.name}")
+        st.dataframe(compare_rows(section_stats(read_records(other)), stats), hide_index=True)
+
 
 st.set_page_config(page_title="resmon", layout="wide")
 st.title("resmon: живой монитор ресурсов")
-live(
-    Path(st.sidebar.text_input("Файл с замерами", os.environ.get("RESMON_LOG", "logs/demo.jsonl")))
+default = Path(os.environ.get("RESMON_LOG", "logs/demo.jsonl"))
+# Все логи из той же папки. Файла по умолчанию может ещё не быть, его показываем всё равно
+logs = sorted({default, *default.parent.glob("*.jsonl"), *default.parent.glob("*.db")})
+log = st.sidebar.selectbox("Запуск", logs, index=logs.index(default), format_func=lambda p: p.name)
+other = st.sidebar.selectbox(
+    "Сравнить с", [None, *(p for p in logs if p != log)], format_func=lambda p: p.name if p else "-"
 )
+live(log, other)

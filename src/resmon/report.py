@@ -106,16 +106,25 @@ def stats_table(stats: Stats, title: str = "Отчёт по секциям") -> 
     return table
 
 
-def compare_table(old: Stats, new: Stats) -> Table:
+def compare_rows(old: Stats, new: Stats) -> list[dict[str, str]]:
     """Сравнение двух запусков по общим секциям: было, стало и изменение в процентах."""
     keys = ["time_s", "cpu_percent", "rss_mb", "py_peak_mb", "gpu_mem_mb"]
     keys = [k for k in keys if any(k in row for run in (old, new) for row in run.values())]
-    table = Table("секция", *(COLUMNS[k] for k in keys), title="Сравнение запусков: было → стало")
+    rows = []
     for path in (p for p in new if p in old):
-        cells = []
+        row = {"секция": path or "весь запуск"}
         for key in keys:
             a, b = old[path].get(key), new[path].get(key)
             change = f" ({(b - a) / a:+.0%})" if a and b is not None else ""
-            cells.append(f"{cell(a, key)} → {cell(b, key)}{change}")
-        table.add_row(escape(path) or "весь запуск", *cells)
+            row[COLUMNS[key]] = f"{cell(a, key)} → {cell(b, key)}{change}"
+        rows.append(row)
+    return rows
+
+
+def compare_table(old: Stats, new: Stats) -> Table:
+    """Сравнение двух запусков в виде таблицы для терминала."""
+    rows = compare_rows(old, new)
+    table = Table(*(rows[0] if rows else ["секция"]), title="Сравнение запусков: было → стало")
+    for row in rows:
+        table.add_row(*(escape(value) for value in row.values()))
     return table

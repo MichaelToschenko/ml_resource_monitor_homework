@@ -55,6 +55,9 @@ def demo(
     leak_mb: Annotated[
         int, typer.Option(min=0, help="Сколько МБ утечь в конце, чтобы показать прогноз")
     ] = 0,
+    trace_python: Annotated[
+        bool, typer.Option(help="Следить за памятью объектов Python. Сильно замедляет программу")
+    ] = True,
     log: LogOption = Path("logs/demo.jsonl"),
     interval: IntervalOption = 0.5,
 ) -> None:
@@ -62,7 +65,7 @@ def demo(
     # Демо тянет torch, поэтому импортируем его только когда оно нужно
     from resmon.demo import run_demo
 
-    with watched(log, interval) as monitor:
+    with watched(log, interval, default_collectors(trace_python=trace_python)) as monitor:
         found = run_demo(monitor, texts, leak_mb)
     console.print("Самые похожие отзывы:")
     for text in found:

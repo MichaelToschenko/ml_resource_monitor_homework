@@ -1,15 +1,27 @@
 services:
-  # Демо: тексты, модель, эмбеддинги, а в конце утечка памяти, пока Docker не убьёт контейнер
+  # Короткое демо без tracemalloc и без утечки, чтобы сравнить его с длинным
+  demo-fast:
+    image: mikhailtoshchenko/resmon:latest
+    command: ["demo", "--log", "logs/fast.jsonl", "--no-trace-python"]
+    init: true
+    volumes:
+      - logs:/app/logs
+
+  # Длинное демо: тексты, модель, эмбеддинги, а в конце утечка памяти, пока Docker не убьёт контейнер
   demo:
     image: mikhailtoshchenko/resmon:latest
     command: ["demo", "--log", "logs/demo.jsonl", "--leak-mb", "5000"]
+    # Запускаем после короткого, чтобы они не делили процессор и цифры честно сравнивались
+    depends_on:
+      demo-fast:
+        condition: service_completed_successfully
     init: true  # Ctrl+C даёт обычную остановку, тогда код 137 значит только нехватку памяти
     mem_limit: 3g
     memswap_limit: 3g  # без свопа, иначе вместо падения контейнер просто будет тормозить
     volumes:
       - logs:/app/logs
 
-  # Живой дашборд на http://localhost:8501, читает тот же лог
+  # Живой дашборд на http://localhost:8501, читает логи обоих демо
   dashboard:
     image: mikhailtoshchenko/resmon:latest
     command: ["dashboard", "--log", "logs/demo.jsonl"]

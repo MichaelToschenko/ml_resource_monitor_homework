@@ -52,6 +52,19 @@ def test_demo_command(runner: CliRunner, tmp_path: Path) -> None:
     assert log.exists()
 
 
+@pytest.mark.usefixtures("fake_model", "hf_api")
+@pytest.mark.parametrize(
+    ("flag", "has_python"), [("--trace-python", True), ("--no-trace-python", False)]
+)
+def test_demo_trace_python_flag(
+    runner: CliRunner, tmp_path: Path, flag: str, has_python: bool
+) -> None:
+    log = tmp_path / "demo.jsonl"
+    runner.invoke(cli.app, ["demo", "--texts", "10", "--log", str(log), flag])
+    samples = [r for r in read_records(log) if r["event"] == "sample"]
+    assert any("py_mb" in r for r in samples) == has_python
+
+
 @pytest.mark.parametrize("code", [0, 3])
 def test_run_watches_other_program(runner: CliRunner, tmp_path: Path, code: int) -> None:
     log = tmp_path / "logs" / "run.db"
