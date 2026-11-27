@@ -1,0 +1,9 @@
+.venv/
+.git/
+logs/
+tests/
+**/__pycache__/
+.*_cache/
+.coverage
+*.db
+.DS_Store

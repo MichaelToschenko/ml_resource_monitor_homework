@@ -122,7 +122,7 @@ def leak_records(stopped: bool, code: int | None = None) -> list[dict[str, objec
 @pytest.mark.parametrize(
     ("stopped", "code", "ending"),
     [
-        (False, None, "оборвался, код выхода 0"),  # монитор умер вместе с процессом
+        (False, None, "оборвался"),  # монитор умер вместе с процессом
         (True, 137, "оборвался, код выхода 137"),  # resmon run: программу убили по памяти
         (True, 0, "завершился сам, код выхода 0"),
     ],

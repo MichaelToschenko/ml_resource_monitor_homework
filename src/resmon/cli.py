@@ -116,11 +116,13 @@ def postmortem(log: LogArgument) -> None:
         raise typer.Exit(1)
     console.print(stats_table(section_stats(records)))
     # Без метки stop процесс умер вместе с монитором. В resmon run смотрим код выхода программы
-    code = next((r["code"] for r in records if r["event"] == "exit"), 0)
+    code = next((r["code"] for r in records if r["event"] == "exit"), None)
     stopped = any(r["event"] == "stop" for r in records)
-    ending = "завершился сам" if stopped and code < 128 else "оборвался"
+    ending = "завершился сам" if stopped and (code is None or code < 128) else "оборвался"
+    if code is not None:
+        ending += f", код выхода {code}"
     last, lead = memory[-1], lead_time(records)
-    console.print(f"Запуск {ending}, код выхода {code}, последняя секция: {last['section'] or '-'}")
+    console.print(f"Запуск {ending}, последняя секция: {last['section'] or '-'}")
     console.print(f"Занято памяти: {last['mem_used_mb']:.0f} из {last['mem_limit_mb']:.0f} МБ")
     console.print("Прогноз молчал" if lead is None else f"Прогноз предупредил за {lead:.0f} с")
 
