@@ -176,6 +176,9 @@ class Monitor:
         for collector in self.collectors:
             collector.start()
         self._stop.clear()
+        # Метка начала, чтобы отчёт отличал этот запуск от прошлых в том же файле
+        self._emit({"event": "start", "t": time.time(), "section": ""})
+        self.sample()
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
         log.info("монитор запущен", extra={"interval": self.interval})
@@ -232,6 +235,8 @@ class Monitor:
     @contextlib.contextmanager
     def section(self, name: str) -> Iterator[None]:
         """Пометить блок кода. Вложенные секции дают путь вида load/read."""
+        if "/" in name:
+            raise ValueError("Знак / в имени секции занят: им разделяются вложенные секции")
         # Замер на входе закрывает отрезок родителя, поэтому он идёт до смены пути
         self.sample()
         parent = self._path

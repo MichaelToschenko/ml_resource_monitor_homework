@@ -79,7 +79,13 @@ def test_start_and_stop_twice(monitor: Monitor) -> None:
     monitor.start()
     monitor.stop()
     monitor.stop()
-    assert len(monitor.records) == 1
+    # Метка старта, замер при старте и замер при остановке
+    assert [r["event"] for r in monitor.records] == ["start", "sample", "sample"]
+
+
+def test_slash_in_section_name(monitor: Monitor) -> None:
+    with pytest.raises(ValueError), monitor.section("a/b"):
+        pass
 
 
 def test_background_thread_samples(monitor: Monitor) -> None:
@@ -123,9 +129,10 @@ def test_real_allocation_is_visible() -> None:
         with monitor.section("greedy"):
             data = b"x" * (200 * MB)
         del data
-    # Первые два замера: вход в секцию и выход из неё
-    entry, leave = [r for r in monitor.records if r["event"] == "sample"][:2]
-    assert leave["section"] == "greedy"
+    samples = [r for r in monitor.records if r["event"] == "sample"]
+    # Первый замер с меткой greedy - выход из секции, замер перед ним - вход
+    i = next(i for i, r in enumerate(samples) if r["section"] == "greedy")
+    entry, leave = samples[i - 1], samples[i]
     assert leave["py_peak_mb"] > 190
     assert leave["rss_mb"] - entry["rss_mb"] > 150
     # После del память Python снова маленькая
