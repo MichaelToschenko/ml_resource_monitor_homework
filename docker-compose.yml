@@ -1,9 +1,8 @@
+# Образ скачивается с Docker Hub. Собрать его самому: docker build -t mikhailtoshchenko/resmon .
 services:
   # Демо: тексты, модель, эмбеддинги, а в конце утечка памяти, пока Docker не убьёт контейнер
   demo:
     image: mikhailtoshchenko/resmon:latest
-    build: .
-    pull_policy: missing
     command: ["demo", "--log", "logs/demo.jsonl", "--leak-mb", "5000"]
     init: true  # Ctrl+C даёт обычную остановку, тогда код 137 значит только нехватку памяти
     mem_limit: 3g
@@ -14,7 +13,6 @@ services:
   # Живой дашборд на http://localhost:8501, читает тот же лог
   dashboard:
     image: mikhailtoshchenko/resmon:latest
-    pull_policy: missing
     command: ["dashboard", "--log", "logs/demo.jsonl"]
     init: true
     ports:
