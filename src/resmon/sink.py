@@ -57,6 +57,7 @@ class SQLiteSink:
     """Пишет записи монитора в базу SQLite: тип, секция и вся запись в JSON."""
 
     def __init__(self, path: str | Path) -> None:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         # Пишем из фонового потока монитора, по очереди нас пускает замок монитора
         self.db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
         # Режим WAL, чтобы дашборд читал базу и не мешал записи
