@@ -39,6 +39,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "respx>=0.23.1",
     "ruff>=0.17.6",
+    "types-psutil>=7.2.2.20261122",
 ]
 
 [[tool.uv.index]]
@@ -61,11 +62,12 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 strict = true
 files = ["src", "tests"]
 
+[[tool.mypy.overrides]]
+# У pynvml нет описаний типов
+module = ["pynvml"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-m 'not slow' --cov=resmon --cov-report=term-missing --cov-fail-under=70"
 markers = ["slow: тесты с настоящей моделью, в CI не запускаются"]
-
-[tool.coverage.run]
-# Дашборд - это интерфейс, а не бизнес-логика
-omit = ["*/resmon/ui.py"]
