@@ -43,7 +43,7 @@ def fetch_texts(count: int) -> list[str]:
     except (httpx.HTTPError, ValueError, KeyError):
         log.warning("тексты не скачались, берём запасные", exc_info=True)
         texts = []
-    return texts or [FALLBACK[i % len(FALLBACK)] for i in range(count)]
+    return texts or list(FALLBACK)
 
 
 def load_model() -> Any:

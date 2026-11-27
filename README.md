@@ -34,6 +34,7 @@ docker compose run --rm dashboard postmortem logs/demo.jsonl
 ```
 
 ```
+... сначала таблица по секциям, как в resmon report ...
 Запуск оборвался, последняя секция: leak
 Занято памяти: 3072 из 3072 МБ
 Прогноз предупредил за 31 с
@@ -43,7 +44,13 @@ docker compose run --rm dashboard postmortem logs/demo.jsonl
 
 ## Как пользоваться в своём коде
 
-Установка для разработки: `uv sync --all-extras`. Библиотеке самой по себе нужны только `psutil`, `numpy`, `typer` и `httpx`, тяжёлое вынесено в наборы `[demo]` (torch и sentence-transformers), `[ui]` (Streamlit и Plotly) и `[gpu]` (nvidia-ml-py).
+Установка в свой проект:
+
+```bash
+uv add "resmon[ui] @ git+https://github.com/MichaelToschenko/ml_resource_monitor_homework.git"
+```
+
+Библиотеке самой по себе нужны только `psutil`, `numpy`, `rich`, `typer` и `httpx`. Тяжёлое вынесено в наборы: `[demo]` (torch и sentence-transformers, нужен для `resmon demo`), `[ui]` (Streamlit и Plotly, нужен для `resmon dashboard`) и `[gpu]` (nvidia-ml-py). Для разработки в клоне репозитория: `uv sync --all-extras`.
 
 ```python
 from rich import print
@@ -62,9 +69,13 @@ def embed(texts): ...
 
 
 with monitor:
-    with monitor.section("load"), monitor.section("read"):  # вложенная секция load/read
-        texts = read_dataset()
-    embed(texts)
+    with monitor.section("load"):
+        with monitor.section("read"):  # вложенная секция load/read
+            rows = read_dataset()
+        with monitor.section("parse"):
+            texts = parse(rows)
+    embed(texts[:1000])
+    embed(texts[1000:])
 
 print(stats_table(section_stats(monitor.records)))
 ```
@@ -82,7 +93,7 @@ print(stats_table(section_stats(monitor.records)))
 
 Лог можно писать в JSONL (`--log run.jsonl`) или в SQLite (`--log run.db`). Модель для демо задаётся переменной окружения `RESMON_MODEL`.
 
-Пример отчёта:
+Пример отчёта для такого кода (колонки диска и сети здесь обрезаны):
 
 ```
 секция      │ вызовы │ время, с │ доля, % │ CPU, % │ RAM пик, МБ │ Python пик, МБ │ GC, мс
@@ -192,7 +203,7 @@ flowchart LR
 ## Тесты и качество кода
 
 ```bash
-uv run pytest                    # 109 тестов, покрытие 99 %, порог в настройках 70 %
+uv run pytest                    # 111 тестов, покрытие 99 %, порог в настройках 70 %
 uv run pytest -m slow --no-cov   # тест с настоящей моделью, в CI не запускается
 uv run pre-commit run --all-files  # ruff, ruff format, mypy --strict, uv.lock и мелкие проверки
 ```
@@ -215,6 +226,8 @@ uv run pre-commit run --all-files  # ruff, ruff format, mypy --strict, uv.lock �
 - **Секции** рассчитаны на один поток. Открывать их одновременно из нескольких потоков нельзя.
 - **tracemalloc** заметно замедляет программу, и если он был включён до монитора, монитор выключит его при остановке.
 - **Память с дочерними процессами** суммируется по RSS, общие страницы между процессами могут посчитаться дважды.
+- **"RAM пик" программы может быть больше лимита контейнера.** RSS включает файлы библиотек и модели, отображённые в память, а Docker не засчитывает их контейнеру как обычную память. С лимитом сравнивается только "занято", поэтому прогноз работает по нему.
+- **Монитор держит все записи в памяти**, чтобы в конце построить отчёт. Одна запись занимает около 1.4 КБ, при замере раз в 0.5 с это около 10 МБ в час. Для очень долгих запусков стоит увеличить интервал.
 - **Код выхода 137** у контейнера `demo` в этой демонстрации означает нехватку памяти. Остановка по Ctrl+C даёт обычный код, потому что в compose включён `init`.
 
 ## Структура

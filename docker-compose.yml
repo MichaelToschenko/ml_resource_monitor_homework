@@ -1,4 +1,3 @@
-# Образ скачивается с Docker Hub. Собрать его самому: docker build -t mikhailtoshchenko/resmon .
 services:
   # Демо: тексты, модель, эмбеддинги, а в конце утечка памяти, пока Docker не убьёт контейнер
   demo:

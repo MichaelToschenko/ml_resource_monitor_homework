@@ -7,7 +7,7 @@ import streamlit as st
 
 from resmon.core import Record
 from resmon.forecast import HORIZON_S, WINDOW_S, OomForecast
-from resmon.report import COLUMNS, Stats, last_run, section_stats
+from resmon.report import COLUMNS, Stats, cell, last_run, section_stats
 from resmon.sink import read_records
 
 
@@ -100,11 +100,9 @@ def live(log: Path) -> None:
 
     stats = section_stats(records)
     st.plotly_chart(icicle(stats))
+    columns = [k for k in COLUMNS if any(k in row for row in stats.values())]
     rows = [
-        {
-            "секция": path or "весь запуск",
-            **{COLUMNS[k]: round(row[k], 1) for k in COLUMNS if k in row},
-        }
+        {"секция": path or "весь запуск", **{COLUMNS[k]: cell(row.get(k), k) for k in columns}}
         for path, row in stats.items()
     ]
     st.dataframe(rows, hide_index=True)

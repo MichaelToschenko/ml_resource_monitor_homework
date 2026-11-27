@@ -2,6 +2,7 @@ from collections import Counter, defaultdict
 from itertools import pairwise
 from statistics import fmean
 
+from rich.markup import escape
 from rich.table import Table
 
 from resmon.core import Record
@@ -11,7 +12,7 @@ Stats = dict[str, dict[str, float]]
 # Как сводить метрику по секции: пик, среднее или прирост счётчика
 PEAKS = ("rss_mb", "py_peak_mb", "gpu_mem_mb")
 MEANS = ("cpu_percent", "gpu_percent")
-DELTAS = ("gc_ms", "disk_read_mb", "disk_write_mb")
+DELTAS = ("gc_ms", "disk_read_mb", "disk_write_mb", "net_recv_mb", "net_sent_mb")
 
 COLUMNS = {
     "calls": "вызовы",
@@ -25,6 +26,8 @@ COLUMNS = {
     "gc_ms": "GC, мс",
     "disk_read_mb": "диск чтение, МБ",
     "disk_write_mb": "диск запись, МБ",
+    "net_recv_mb": "сеть приём, МБ",
+    "net_sent_mb": "сеть отдача, МБ",
 }
 
 
@@ -98,7 +101,8 @@ def stats_table(stats: Stats, title: str = "Отчёт по секциям") -> 
     table = Table("секция", *(COLUMNS[k] for k in columns), title=title)
     for path, row in stats.items():
         name = "  " * path.count("/") + path.rsplit("/", 1)[-1] if path else "весь запуск"
-        table.add_row(name, *(cell(row.get(k), k) for k in columns))
+        # escape: квадратные скобки в имени секции rich иначе принял бы за разметку
+        table.add_row(escape(name), *(cell(row.get(k), k) for k in columns))
     return table
 
 
@@ -113,5 +117,5 @@ def compare_table(old: Stats, new: Stats) -> Table:
             a, b = old[path].get(key), new[path].get(key)
             change = f" ({(b - a) / a:+.0%})" if a and b is not None else ""
             cells.append(f"{cell(a, key)} → {cell(b, key)}{change}")
-        table.add_row(path or "весь запуск", *cells)
+        table.add_row(escape(path) or "весь запуск", *cells)
     return table

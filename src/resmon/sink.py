@@ -16,6 +16,7 @@ class JsonFormatter(logging.Formatter):
     BASE_FIELDS = set(vars(logging.makeLogRecord({}))) | {"message", "asctime"}
 
     def format(self, record: logging.LogRecord) -> str:
+        """Собрать строку JSON из записи лога."""
         data = {
             "time": self.formatTime(record),
             "level": record.levelname,
@@ -53,6 +54,7 @@ class JsonlSink:
         )
 
     def __call__(self, record: Record) -> None:
+        """Дописать запись строкой в файл."""
         line = json.dumps(record, ensure_ascii=False)
         self.handler.handle(logging.makeLogRecord({"msg": line}))
 
@@ -73,6 +75,7 @@ class SQLiteSink:
         self.db.execute("CREATE TABLE IF NOT EXISTS records (event TEXT, section TEXT, data TEXT)")
 
     def __call__(self, record: Record) -> None:
+        """Добавить запись в базу."""
         row = (record["event"], record["section"], json.dumps(record, ensure_ascii=False))
         self.db.execute("INSERT INTO records VALUES (?, ?, ?)", row)
 

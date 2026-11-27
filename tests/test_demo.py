@@ -33,7 +33,7 @@ def test_fallback_without_network(
 ) -> None:
     respx_mock.get(ROWS_URL).mock(side_effect=[failure])
     texts = fetch_texts(6)
-    assert texts == [*FALLBACK, *FALLBACK[:2]]
+    assert texts == list(FALLBACK)
 
 
 @pytest.mark.usefixtures("fake_model", "hf_api")

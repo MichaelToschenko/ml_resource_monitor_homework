@@ -82,6 +82,7 @@ class OomForecast:
         return False
 
     def __call__(self, record: Record) -> None:
+        """Учесть замер и при новой тревоге написать предупреждение в лог."""
         if self.update(record) and self.ttl is not None:
             extra = {"ttl_s": round(self.ttl, 1), "mem_used_mb": round(record["mem_used_mb"])}
             log.warning("память кончится примерно через %.0f с", self.ttl, extra=extra)

@@ -127,3 +127,9 @@ def test_compare_takes_columns_from_both_runs(records: list[Record]) -> None:
     old = section_stats(records)
     new = {path: {**row, "gpu_mem_mb": 512.0} for path, row in old.items()}
     assert "- → 512.0" in text(compare_table(old, new))
+
+
+def test_network_per_section() -> None:
+    # Счётчик сети растёт с загрузки системы, в отчёт идёт прирост за секцию
+    records = [sample(0, net_recv_mb=1000), sample(1, "fetch", net_recv_mb=1003.5)]
+    assert section_stats(records)["fetch"]["net_recv_mb"] == pytest.approx(3.5)

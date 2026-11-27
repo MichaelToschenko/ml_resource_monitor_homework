@@ -121,6 +121,20 @@ def test_process_counts_children(monkeypatch: pytest.MonkeyPatch, kids: int) -> 
     assert metrics == {"cpu_percent": 10.0 * (kids + 1), "rss_mb": 100.0 * (kids + 1)}
 
 
+class LockedProcess(FakeProcess):
+    """Чужой системный процесс, к которому нет доступа."""
+
+    def cpu_percent(self) -> float:
+        raise psutil.AccessDenied(self.pid)
+
+
+def test_locked_child_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
+    parent = FakeProcess(1)
+    monkeypatch.setattr(parent, "children", lambda recursive: [LockedProcess(2)])
+    monkeypatch.setattr(psutil, "Process", lambda pid: parent)
+    assert ProcessCollector().collect() == {"cpu_percent": 10.0, "rss_mb": 100.0}
+
+
 def test_system_metrics() -> None:
     metrics = SystemCollector().collect()
     assert {"mem_used_mb", "mem_limit_mb", "disk_read_mb", "net_recv_mb"} <= metrics.keys()
@@ -173,7 +187,7 @@ def test_gc_collector_counts_collections() -> None:
 
 
 class NVMLError(Exception):
-    pass
+    """Ошибка из поддельного pynvml."""
 
 
 def fake_pynvml(driver: bool) -> SimpleNamespace:

@@ -45,13 +45,14 @@ class ProcessCollector(Collector):
     def collect(self) -> dict[str, float]:
         try:
             procs = [self.process, *self.process.children(recursive=True)]
-        except psutil.NoSuchProcess:
+        except psutil.Error:
             return {}
         # psutil считает CPU от прошлого вызова, поэтому храним старые объекты живых процессов
         self._known = {p.pid: self._known.get(p.pid, p) for p in procs}
         cpu = rss = 0.0
         for proc in self._known.values():
-            with contextlib.suppress(psutil.NoSuchProcess):
+            # Процесс мог уже завершиться, а к чужому системному у нас может не быть доступа
+            with contextlib.suppress(psutil.Error):
                 proc_cpu, proc_rss = proc.cpu_percent(), proc.memory_info().rss
                 cpu += proc_cpu
                 rss += proc_rss
@@ -77,11 +78,7 @@ class SystemCollector(Collector):
 
     def collect(self) -> dict[str, float]:
         used, limit = memory_usage_mb()
-        metrics = {
-            "ram_percent": psutil.virtual_memory().percent,
-            "mem_used_mb": used,
-            "mem_limit_mb": limit,
-        }
+        metrics = {"mem_used_mb": used, "mem_limit_mb": limit}
         if disk := psutil.disk_io_counters():
             metrics |= {
                 "disk_read_mb": disk.read_bytes / MB,

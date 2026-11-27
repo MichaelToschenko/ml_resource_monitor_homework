@@ -39,12 +39,12 @@ def watched(
     log: Path, interval: float, collectors: list[Collector] | None = None
 ) -> Iterator[Monitor]:
     """Монитор с записью замеров в файл. В конце печатает отчёт, даже если всё упало."""
-    with (
-        closing(make_sink(log)) as sink,
-        Monitor(interval, sinks=[sink, OomForecast()], collectors=collectors) as monitor,
-    ):
+    with closing(make_sink(log)) as sink:
+        monitor = Monitor(interval, sinks=[sink, OomForecast()], collectors=collectors)
+        # Отчёт печатаем после остановки монитора, чтобы в него попал последний замер
         try:
-            yield monitor
+            with monitor:
+                yield monitor
         finally:
             console.print(stats_table(section_stats(monitor.records)))
 
@@ -66,7 +66,7 @@ def demo(
         found = run_demo(monitor, texts, leak_mb)
     console.print("Самые похожие отзывы:")
     for text in found:
-        console.print(f"- {text[:120]}")
+        console.print(f"- {text[:120]}", markup=False)
 
 
 @app.command(context_settings={"allow_interspersed_args": False})
