@@ -1,6 +1,8 @@
 import logging
+import os
 import signal
 import subprocess
+import sys
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
 from pathlib import Path
@@ -121,6 +123,17 @@ def postmortem(log: LogArgument) -> None:
     console.print(f"Запуск {ending}, код выхода {code}, последняя секция: {last['section'] or '-'}")
     console.print(f"Занято памяти: {last['mem_used_mb']:.0f} из {last['mem_limit_mb']:.0f} МБ")
     console.print("Прогноз молчал" if lead is None else f"Прогноз предупредил за {lead:.0f} с")
+
+
+@app.command()
+def dashboard(log: LogOption = Path("logs/demo.jsonl"), port: int = 8501) -> None:
+    """Открыть живой дашборд в браузере: графики, дерево секций и обратный отсчёт."""
+    page = Path(__file__).with_name("ui.py")
+    args = [sys.executable, "-m", "streamlit", "run", str(page), "--server.port", str(port)]
+    args += ["--server.headless", "true", "--browser.gatherUsageStats", "false"]
+    # Streamlit запускает страницу отдельным скриптом, путь к логу передаём через окружение.
+    # Заменяем себя на Streamlit, чтобы сигналы остановки от Docker шли прямо ему
+    os.execve(sys.executable, args, os.environ | {"RESMON_LOG": str(log)})
 
 
 @app.command()

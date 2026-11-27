@@ -55,6 +55,17 @@ def test_broken_tail_is_skipped(monitor: Monitor, tmp_path: Path) -> None:
     assert read_records(path) == monitor.records
 
 
+def test_new_run_after_kill(monitor: Monitor, tmp_path: Path) -> None:
+    path = tmp_path / "metrics.jsonl"
+    # Прошлый запуск убили посреди строки, потом в тот же файл пишет новый
+    path.write_text('{"event": "sample", "t": 1}\n{"event": "sam')
+    sink = JsonlSink(path)
+    monitor.sinks.append(sink)
+    monitor.mark("start")
+    sink.close()
+    assert [r["event"] for r in read_records(path)] == ["sample", "start"]
+
+
 def test_failing_sink_does_not_break_program(monitor: Monitor) -> None:
     def full_disk(record: Record) -> None:
         raise OSError("нет места")

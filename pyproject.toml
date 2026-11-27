@@ -63,8 +63,8 @@ strict = true
 files = ["src", "tests"]
 
 [[tool.mypy.overrides]]
-# У pynvml нет описаний типов
-module = ["pynvml"]
+# У pynvml и plotly нет описаний типов
+module = ["pynvml", "plotly.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

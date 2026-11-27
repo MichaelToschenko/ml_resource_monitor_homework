@@ -1,7 +1,8 @@
 import json
 import logging
+import os
 import sqlite3
-from contextlib import closing
+from contextlib import closing, suppress
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -38,7 +39,14 @@ class JsonlSink:
     """Пишет каждую запись монитора строкой JSON в файл с ротацией."""
 
     def __init__(self, path: str | Path, max_mb: float = 10, backups: int = 5) -> None:
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Прошлый процесс могли убить посреди строки. Тогда начинаем с новой строки
+        if path.exists() and path.stat().st_size:
+            with path.open("rb+") as file:
+                file.seek(-1, os.SEEK_END)
+                if file.read(1) != b"\n":
+                    file.write(b"\n")
         # Обработчик сразу отдаёт строку системе, поэтому лог переживает даже kill -9
         self.handler = RotatingFileHandler(
             path, maxBytes=int(max_mb * MB), backupCount=backups, encoding="utf-8"
@@ -88,6 +96,10 @@ def read_records(path: str | Path) -> list[Record]:
     # Ротация переименовывает старые куски в .1, .2 и дальше, самый старый с большим номером
     old = [p for p in path.parent.glob(path.name + ".*") if p.suffix[1:].isdigit()]
     parts = [*sorted(old, key=lambda p: -int(p.suffix[1:])), path]
-    # Последняя строка может быть недописана, если процесс убили во время записи
-    lines = [line for part in parts for line in part.read_text("utf-8").split("\n")[:-1]]
-    return [json.loads(line) for line in lines]
+    records = []
+    for part in parts:
+        for line in part.read_text("utf-8").split("\n"):
+            # Обрывок строки остаётся, если процесс убили во время записи. Его пропускаем
+            with suppress(json.JSONDecodeError):
+                records.append(json.loads(line))
+    return records

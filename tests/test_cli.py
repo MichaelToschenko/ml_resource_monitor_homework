@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -152,3 +153,19 @@ def test_killed_program_is_reported(runner: CliRunner, tmp_path: Path) -> None:
     assert result.exit_code == 137
     result = runner.invoke(cli.app, ["postmortem", log])
     assert "Запуск оборвался, код выхода 137" in result.output
+
+
+def test_dashboard_command(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+
+    def fake_execve(program: str, args: list[str], env: dict[str, str]) -> None:
+        """Настоящий Streamlit не запускаем, только запоминаем, с чем бы его вызвали."""
+        calls.append((args, env))
+
+    monkeypatch.setattr(os, "execve", fake_execve)
+    result = runner.invoke(cli.app, ["dashboard", "--log", "logs/x.jsonl", "--port", "9000"])
+    assert result.exit_code == 0
+    args, env = calls[0]
+    assert args[1:4] == ["-m", "streamlit", "run"]
+    assert "9000" in args
+    assert env["RESMON_LOG"] == "logs/x.jsonl"
