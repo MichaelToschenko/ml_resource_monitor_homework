@@ -1,11 +1,12 @@
 import logging
 import os
+import time
 from typing import Any
 
 import httpx
 import numpy as np
 
-from resmon.core import Monitor
+from resmon.core import MB, Monitor
 
 log = logging.getLogger(__name__)
 
@@ -14,6 +15,7 @@ DATASET = {"dataset": "stanfordnlp/imdb", "config": "plain_text", "split": "trai
 PAGE = 100  # больше строк за один запрос сервис не отдаёт
 BATCH = 64
 QUERY = "a scary horror movie with a lot of blood"
+LEAK_STEP_MB = 10  # за шаг утечки, шаг раз в полсекунды
 
 # Запасные отзывы на случай, если интернета нет
 FALLBACK = (
@@ -53,7 +55,17 @@ def load_model() -> Any:
     return SentenceTransformer(name, device="cpu")
 
 
-def run_demo(monitor: Monitor, count: int = 500) -> list[str]:
+def leak(monitor: Monitor, total_mb: int) -> None:
+    """Имитация утечки: кэш, который никто не чистит. Растёт на 20 МБ в секунду."""
+    with monitor.section("leak"):
+        cache = []
+        for _ in range(total_mb // LEAK_STEP_MB):
+            # np.ones заполняет память, поэтому система правда её выделяет
+            cache.append(np.ones(LEAK_STEP_MB * MB, dtype=np.uint8))
+            time.sleep(0.5)
+
+
+def run_demo(monitor: Monitor, count: int = 500, leak_mb: int = 0) -> list[str]:
     """Скачать тексты, посчитать эмбеддинги и найти три отзыва, похожих на запрос."""
     with monitor.section("fetch_texts"):
         texts = fetch_texts(count)
@@ -74,4 +86,6 @@ def run_demo(monitor: Monitor, count: int = 500) -> list[str]:
             [f"query: {QUERY}"], normalize_embeddings=True, show_progress_bar=False
         )[0]
         best = np.argsort(vectors @ query)[::-1][:3]
+    if leak_mb:
+        leak(monitor, leak_mb)
     return [texts[i] for i in best]

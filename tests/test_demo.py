@@ -1,3 +1,4 @@
+import time
 from unittest.mock import patch
 
 import httpx
@@ -66,3 +67,10 @@ def test_demo_with_real_model() -> None:
     with Monitor() as monitor:
         found = run_demo(monitor, count=20)
     assert len(found) == 3
+
+
+@pytest.mark.usefixtures("fake_model", "hf_api")
+def test_demo_leak(monitor: Monitor, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(time, "sleep", lambda seconds: None)
+    run_demo(monitor, count=10, leak_mb=30)
+    assert section_stats(monitor.records)["leak"]["calls"] == 1

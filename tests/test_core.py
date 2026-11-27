@@ -1,6 +1,7 @@
 import gc
 import sys
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import psutil
@@ -17,6 +18,7 @@ from resmon.core import (
     Record,
     SystemCollector,
     default_collectors,
+    memory_usage_mb,
 )
 
 
@@ -79,8 +81,8 @@ def test_start_and_stop_twice(monitor: Monitor) -> None:
     monitor.start()
     monitor.stop()
     monitor.stop()
-    # Метка старта, замер при старте и замер при остановке
-    assert [r["event"] for r in monitor.records] == ["start", "sample", "sample"]
+    # Метки старта и конца и замеры при старте и при остановке
+    assert [r["event"] for r in monitor.records] == ["start", "sample", "sample", "stop"]
 
 
 def test_slash_in_section_name(monitor: Monitor) -> None:
@@ -120,7 +122,27 @@ def test_process_counts_children(monkeypatch: pytest.MonkeyPatch, kids: int) -> 
 
 
 def test_system_metrics() -> None:
-    assert {"ram_percent", "disk_read_mb", "net_recv_mb"} <= SystemCollector().collect().keys()
+    metrics = SystemCollector().collect()
+    assert {"mem_used_mb", "mem_limit_mb", "disk_read_mb", "net_recv_mb"} <= metrics.keys()
+
+
+def test_memory_in_container(tmp_path: Path) -> None:
+    # Так cgroup выглядит в контейнере с лимитом 2 ГБ
+    (tmp_path / "memory.max").write_text("2147483648\n")
+    (tmp_path / "memory.current").write_text(str(700 * MB))
+    (tmp_path / "memory.stat").write_text(f"anon 1\ninactive_file {200 * MB}\nactive_file 5\n")
+    # Неактивный файловый кэш не считаем, как docker stats
+    assert memory_usage_mb(tmp_path) == (500.0, 2048.0)
+
+
+@pytest.mark.parametrize("limit", [None, "max\n"])
+def test_memory_without_container(tmp_path: Path, limit: str | None) -> None:
+    if limit:
+        (tmp_path / "memory.max").write_text(limit)
+    used, total = memory_usage_mb(tmp_path)
+    # Без лимита контейнера смотрим на всю машину
+    assert total == psutil.virtual_memory().total / MB
+    assert 0 < used < total
 
 
 def test_real_allocation_is_visible() -> None:
@@ -136,7 +158,7 @@ def test_real_allocation_is_visible() -> None:
     assert leave["py_peak_mb"] > 190
     assert leave["rss_mb"] - entry["rss_mb"] > 150
     # После del память Python снова маленькая
-    assert monitor.records[-1]["py_mb"] < 50
+    assert samples[-1]["py_mb"] < 50
 
 
 def test_gc_collector_counts_collections() -> None:

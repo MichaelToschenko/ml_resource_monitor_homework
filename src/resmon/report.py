@@ -28,11 +28,15 @@ COLUMNS = {
 }
 
 
+def last_run(records: list[Record]) -> list[Record]:
+    """Записи последнего запуска: в одном файле их может быть несколько."""
+    starts = [i for i, r in enumerate(records) if r["event"] == "start"]
+    return records[starts[-1] if starts else 0 :]
+
+
 def section_stats(records: list[Record]) -> Stats:
     """Итоги по секциям последнего запуска в порядке дерева. Секция "" - это весь запуск."""
-    # В одном файле может быть несколько запусков, берём последний
-    starts = [i for i, r in enumerate(records) if r["event"] == "start"]
-    records = records[starts[-1] if starts else 0 :]
+    records = last_run(records)
     samples = [r for r in records if r["event"] == "sample"]
     calls = Counter(r["section"] for r in records if r["event"] == "section")
     # Для каждой метрики храним пары (значение, длина отрезка)

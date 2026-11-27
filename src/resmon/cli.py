@@ -11,7 +11,8 @@ from rich.console import Console
 
 from resmon import __version__
 from resmon.core import Collector, Monitor, default_collectors
-from resmon.report import compare_table, section_stats, stats_table
+from resmon.forecast import OomForecast, lead_time
+from resmon.report import compare_table, last_run, section_stats, stats_table
 from resmon.sink import make_sink, read_records, setup_logging
 
 logger = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ def watched(
     """Монитор с записью замеров в файл. В конце печатает отчёт, даже если всё упало."""
     with (
         closing(make_sink(log)) as sink,
-        Monitor(interval, sinks=[sink], collectors=collectors) as monitor,
+        Monitor(interval, sinks=[sink, OomForecast()], collectors=collectors) as monitor,
     ):
         try:
             yield monitor
@@ -49,6 +50,9 @@ def watched(
 @app.command()
 def demo(
     texts: Annotated[int, typer.Option(min=1, help="Сколько отзывов скачать")] = 500,
+    leak_mb: Annotated[
+        int, typer.Option(min=0, help="Сколько МБ утечь в конце, чтобы показать прогноз")
+    ] = 0,
     log: LogOption = Path("logs/demo.jsonl"),
     interval: IntervalOption = 0.5,
 ) -> None:
@@ -57,7 +61,7 @@ def demo(
     from resmon.demo import run_demo
 
     with watched(log, interval) as monitor:
-        found = run_demo(monitor, texts)
+        found = run_demo(monitor, texts, leak_mb)
     console.print("Самые похожие отзывы:")
     for text in found:
         console.print(f"- {text[:120]}")
@@ -78,12 +82,14 @@ def run(
     # Ctrl+C получит и сама программа. Пусть она спокойно завершится, а мы досмотрим до конца
     previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
     try:
-        with watched(log, interval, default_collectors(process.pid)):
+        with watched(log, interval, default_collectors(process.pid)) as monitor:
+            # Если программу убили сигналом, wait вернёт минус его номер. В shell это 128 + номер
             code = process.wait()
+            code = 128 - code if code < 0 else code
+            monitor.mark("exit", code=code)
     finally:
         signal.signal(signal.SIGINT, previous)
-    # Если программу убили сигналом, wait вернёт минус номер сигнала. В shell принято 128 + номер
-    raise typer.Exit(128 - code if code < 0 else code)
+    raise typer.Exit(code)
 
 
 @app.command()
@@ -96,6 +102,25 @@ def report(log: LogArgument) -> None:
 def compare(old: LogArgument, new: LogArgument) -> None:
     """Сравнить два запуска: было и стало по каждой секции."""
     console.print(compare_table(section_stats(read_records(old)), section_stats(read_records(new))))
+
+
+@app.command()
+def postmortem(log: LogArgument) -> None:
+    """Разобрать запуск по логу: чем он кончился и успел ли прогноз предупредить."""
+    records = last_run(read_records(log))
+    memory = [r for r in records if r["event"] == "sample" and "mem_used_mb" in r]
+    if not memory:
+        logger.error("в логе нет замеров памяти, разбирать нечего")
+        raise typer.Exit(1)
+    console.print(stats_table(section_stats(records)))
+    # Без метки stop процесс умер вместе с монитором. В resmon run смотрим код выхода программы
+    code = next((r["code"] for r in records if r["event"] == "exit"), 0)
+    stopped = any(r["event"] == "stop" for r in records)
+    ending = "завершился сам" if stopped and code < 128 else "оборвался"
+    last, lead = memory[-1], lead_time(records)
+    console.print(f"Запуск {ending}, код выхода {code}, последняя секция: {last['section'] or '-'}")
+    console.print(f"Занято памяти: {last['mem_used_mb']:.0f} из {last['mem_limit_mb']:.0f} МБ")
+    console.print("Прогноз молчал" if lead is None else f"Прогноз предупредил за {lead:.0f} с")
 
 
 @app.command()

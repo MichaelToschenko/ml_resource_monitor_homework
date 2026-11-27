@@ -6,6 +6,7 @@ import threading
 import time
 import tracemalloc
 from collections.abc import Callable, Iterable, Iterator
+from pathlib import Path
 from types import ModuleType
 from typing import Any, ParamSpec, Self, TypeVar
 
@@ -57,11 +58,30 @@ class ProcessCollector(Collector):
         return {"cpu_percent": cpu, "rss_mb": rss / MB}
 
 
+def memory_usage_mb(cgroup: Path = Path("/sys/fs/cgroup")) -> tuple[float, float]:
+    """Сколько памяти занято и сколько можно занять: в контейнере по его лимиту, иначе по машине."""
+    # Лимит Docker лежит в cgroup, psutil его не видит. Без лимита там написано max
+    limit_file = cgroup / "memory.max"
+    limit = limit_file.read_text().strip() if limit_file.exists() else "max"
+    if limit == "max":
+        memory = psutil.virtual_memory()
+        return (memory.total - memory.available) / MB, memory.total / MB
+    # Как в docker stats: неактивный файловый кэш система отдаст сама, его не считаем
+    stat = dict(line.split() for line in (cgroup / "memory.stat").read_text().splitlines())
+    used = int((cgroup / "memory.current").read_text()) - int(stat["inactive_file"])
+    return used / MB, int(limit) / MB
+
+
 class SystemCollector(Collector):
-    """Память всей машины и счётчики диска и сети с момента загрузки системы."""
+    """Занятая память и её лимит, а ещё счётчики диска и сети с загрузки системы."""
 
     def collect(self) -> dict[str, float]:
-        metrics = {"ram_percent": psutil.virtual_memory().percent}
+        used, limit = memory_usage_mb()
+        metrics = {
+            "ram_percent": psutil.virtual_memory().percent,
+            "mem_used_mb": used,
+            "mem_limit_mb": limit,
+        }
         if disk := psutil.disk_io_counters():
             metrics |= {
                 "disk_read_mb": disk.read_bytes / MB,
@@ -177,7 +197,7 @@ class Monitor:
             collector.start()
         self._stop.clear()
         # Метка начала, чтобы отчёт отличал этот запуск от прошлых в том же файле
-        self._emit({"event": "start", "t": time.time(), "section": ""})
+        self.mark("start")
         self.sample()
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
@@ -191,6 +211,8 @@ class Monitor:
         self._thread.join()
         self._thread = None
         self.sample()
+        # Метка конца: если её нет в логе, значит процесс оборвался
+        self.mark("stop")
         for collector in self.collectors:
             collector.stop()
         log.info("монитор остановлен", extra={"records": len(self.records)})
@@ -217,6 +239,10 @@ class Monitor:
                     sink(record)
                 except Exception:
                     log.exception("хранилище %s упало", type(sink).__name__)
+
+    def mark(self, event: str, **fields: Any) -> None:
+        """Записать в лог отдельное событие, например код выхода чужой программы."""
+        self._emit({"event": event, "t": time.time(), "section": "", **fields})
 
     def sample(self) -> Record:
         """Снять показания со всех сборщиков и отправить их в sinks."""
